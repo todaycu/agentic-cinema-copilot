@@ -1,5 +1,6 @@
 import os
 import asyncio
+from functools import partial
 from typing import Dict, Any
 
 try:
@@ -14,13 +15,19 @@ def get_client():
         return Parallel(api_key=api_key)
     return None
 
+
+async def _parallel_call(callable_, *args, timeout_seconds: int = 25, **kwargs):
+    """Run the synchronous Parallel SDK off the FastAPI event loop."""
+    operation = partial(callable_, *args, **kwargs)
+    return await asyncio.wait_for(asyncio.to_thread(operation), timeout=timeout_seconds)
+
 async def parallel_web_search(query: str) -> Dict[str, Any]:
     """Quick search via Parallel Search API (Hackathon Partner Requirement)"""
     client = get_client()
     if client:
         try:
             # Correct SDK: p.search(search_queries=[...])
-            result = client.search(search_queries=[query])
+            result = await _parallel_call(client.search, search_queries=[query])
             print("Parallel Search: LIVE API call succeeded")
 
             # Extract real citations from results
@@ -72,7 +79,7 @@ async def parallel_deep_research(query: str) -> Dict[str, Any]:
     if client:
         try:
             # Correct SDK: p.task_run.create(input=..., processor="base")
-            task = client.task_run.create(input=query, processor="base")
+            task = await _parallel_call(client.task_run.create, input=query, processor="base")
             # The current Parallel SDK exposes the identifier as run_id.
             task_id = task.run_id
             print(f"Parallel Task API: task created: {task_id}")
@@ -80,9 +87,9 @@ async def parallel_deep_research(query: str) -> Dict[str, Any]:
             # Poll for result (task_run is async)
             for _ in range(15):
                 await asyncio.sleep(2)
-                status = client.task_run.retrieve(task_id)
+                status = await _parallel_call(client.task_run.retrieve, task_id)
                 if hasattr(status, 'status') and status.status in ('completed', 'done', 'finished'):
-                    result = client.task_run.result(task_id)
+                    result = await _parallel_call(client.task_run.result, task_id)
                     output = getattr(result, 'output', str(result))
                     print("Parallel Task API: research complete")
                     return {
@@ -126,7 +133,7 @@ async def parallel_extract(url: str, objective: str) -> Dict[str, Any]:
     client = get_client()
     if client:
         try:
-            result = client.extract(urls=[url])
+            result = await _parallel_call(client.extract, urls=[url])
             print(f"Parallel Extract: ✅ LIVE extraction from {url}")
             return {"extracted_content": str(result)[:500]}
         except Exception as e:

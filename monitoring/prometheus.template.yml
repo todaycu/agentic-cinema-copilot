@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+remote_write:
+  - url: "__GRAFANA_REMOTE_WRITE_URL__"
+    basic_auth:
+      username: "__GRAFANA_REMOTE_WRITE_USERNAME__"
+      password: "__GRAFANA_REMOTE_WRITE_TOKEN__"
+
+scrape_configs:
+  - job_name: "agentic-cinema-render-farm-demo"
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          application: "agentic-cinema-copilot"
+          telemetry_source: "instrumented-demo-simulator"

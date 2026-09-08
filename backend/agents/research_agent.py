@@ -5,6 +5,7 @@ from backend.services.event_bus import event_bus
 from backend.models import SSEEvent, AgentEvent
 from backend.tools.parallel_tools import parallel_web_search, parallel_deep_research, parallel_extract
 from backend.config import settings
+from backend.services.gemini_runtime import generate_content
 
 try:
     from google import genai
@@ -97,7 +98,7 @@ class ResearchAgent:
                     f"Based on these search results, identify the most likely root cause for this issue: {objective}. "
                     f"Search results: {search_results} \n Deep Research: {deep_results}"
                 )
-                resp = client.models.generate_content(model=settings.GEMINI_MODEL, contents=prompt)
+                resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=prompt)
                 analysis = resp.text
                 await self.think("Completed root cause analysis of external data.")
             except Exception as e:

@@ -4,6 +4,7 @@ import uuid
 from backend.services.event_bus import event_bus
 from backend.models import SSEEvent, AgentEvent, Mission, MissionStatus, TaskStep
 from backend.config import settings
+from backend.services.gemini_runtime import generate_content
 
 try:
     from google import genai
@@ -60,7 +61,7 @@ class Orchestrator:
                     f"Objective: {self.mission.objective}\n"
                     "Output ONLY the 3 step titles, one per line. Do not use bullets or numbers."
                 )
-                resp = client.models.generate_content(model=settings.GEMINI_MODEL, contents=prompt)
+                resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=prompt)
                 lines = [line.strip() for line in resp.text.strip().split('\n') if line.strip()]
                 for title in lines[:3]:
                     # Clean up any bullets if the model ignores the prompt
@@ -159,7 +160,7 @@ class Orchestrator:
                     f"Objective: {self.mission.objective}\n\n"
                     f"Conclude with: 'RECOMMENDED ACTION: [specific action]'"
                 )
-                resp = client.models.generate_content(model=settings.GEMINI_MODEL, contents=synth_prompt)
+                resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=synth_prompt)
                 recommendation = resp.text
                 print(f"Gemini recommendation: {recommendation[:100]}...")
                 await self.think("Recommendation synthesized successfully.")

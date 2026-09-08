@@ -6,6 +6,7 @@ from backend.models import SSEEvent, AgentEvent
 from backend.tools.grafana_tools import query_prometheus, search_dashboards, get_active_alerts
 from backend.tools.script_parser import parse_shooting_schedule
 from backend.config import settings
+from backend.services.gemini_runtime import generate_content
 
 try:
     from google import genai
@@ -66,13 +67,29 @@ class DataAgent:
 
         # 2. Query Grafana MCP Dashboards & Prometheus Metrics
         start_time_mcp = time.time()
+        gpu_metric = 'render_node_gpu_utilization_percent{node="render-node-07",cluster="cluster-b"}'
+        queue_metric = 'render_queue_depth_frames{cluster="cluster-b"}'
         await event_bus.publish(self.mission_id, SSEEvent(
             event="TOOL_START",
-            data=AgentEvent(type="tool", agent_id=self.agent_id, data={"tool": "query_prometheus", "metric": "render_node_cpu_utilization"})
+            data=AgentEvent(type="tool", agent_id=self.agent_id, data={"tool": "query_prometheus", "metrics": [gpu_metric, queue_metric]})
         ))
         
         dashboards = await search_dashboards(objective)
-        metrics = await query_prometheus("render_node_cpu_utilization", 60)
+        gpu, queue = await asyncio.gather(
+            query_prometheus(gpu_metric, 60),
+            query_prometheus(queue_metric, 60),
+        )
+        metric_statuses = {gpu.get("status"), queue.get("status")}
+        metrics = {
+            "status": (
+                "live" if metric_statuses == {"live"}
+                else "unavailable" if "unavailable" in metric_statuses
+                else "no_data"
+            ),
+            "gpu_utilization": gpu,
+            "queue_depth": queue,
+            "citations": gpu.get("citations", []) + queue.get("citations", []),
+        }
         alerts = await get_active_alerts()
         duration_mcp = time.time() - start_time_mcp
         
@@ -104,7 +121,7 @@ class DataAgent:
         
         client = await self.get_gemini_client()
         interpretation = "Unable to interpret metrics."
-        telemetry_evidence = metrics.get("status") == "live"
+        telemetry_evidence = metrics.get("status") == "live" and alerts.get("status") == "live"
         if client and telemetry_evidence:
             try:
                 prompt = (
@@ -113,7 +130,7 @@ class DataAgent:
                     f"These alerts are firing: {alerts}. "
                     "Interpret the anomaly pattern and suggest what is causing the issue."
                 )
-                resp = client.models.generate_content(model=settings.GEMINI_MODEL, contents=prompt)
+                resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=prompt)
                 interpretation = resp.text
                 await self.think("Successfully interpreted the telemetry data.")
             except Exception as e:
