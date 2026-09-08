@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: render-farm-copilot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PARALLEL_API_KEY
+        sync: false
+      - key: GRAFANA_URL
+        sync: false
+      - key: GRAFANA_SERVICE_ACCOUNT_TOKEN
+        sync: false
+      - key: GRAFANA_MCP_COMMAND
+        value: mcp-grafana
+      - key: PORT
+        value: "8000"

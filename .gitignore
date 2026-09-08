@@ -45,6 +45,7 @@ logs/
 # Private working notes
 procedures_of_Ai_Agent.txt
 monitoring/prometheus.runtime.yml
+backend/tools/render_farm_telemetry.py
 
 # Testing
 .coverage

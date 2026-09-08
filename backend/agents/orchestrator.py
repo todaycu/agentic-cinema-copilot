@@ -5,6 +5,7 @@ from backend.services.event_bus import event_bus
 from backend.models import SSEEvent, AgentEvent, Mission, MissionStatus, TaskStep
 from backend.config import settings
 from backend.services.gemini_runtime import generate_content
+from backend.agents.adk_agents import synthesize_with_adk
 
 try:
     from google import genai
@@ -147,29 +148,40 @@ class Orchestrator:
 
         await self.think("Synthesizing final recommendation for render farm incident...")
 
-        # Synthesize recommendation with Gemini or fallback
+        # Synthesize recommendation via genuine Google ADK Agent
         recommendation = ""
-        if client:
-            try:
-                synth_prompt = (
-                    f"You are the Render Farm Incident Copilot orchestrator. "
-                    f"Based on these findings, synthesize a clear, actionable recommendation to resolve this render farm incident:\n\n"
-                    f"Research: {res_data.get('findings', res_data.get('search', ''))}\n"
-                    f"Metrics: {dat_data.get('interpretation', '')}\n"
-                    f"Verification: {ver_data}\n\n"
-                    f"Objective: {self.mission.objective}\n\n"
-                    f"Conclude with: 'RECOMMENDED ACTION: [specific action]'"
-                )
-                resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=synth_prompt)
-                recommendation = resp.text
-                print(f"Gemini recommendation: {recommendation[:100]}...")
-                await self.think("Recommendation synthesized successfully.")
-            except Exception as e:
-                print(f"Gemini synthesis error: {e}")
-                recommendation = f"Scale render farm resources to resolve the detected bottleneck. RECOMMENDED ACTION: Add 4 GPU nodes to cluster."
+        try:
+            await self.think("Running ADK synthesis agent for recommendation...")
+            recommendation = await synthesize_with_adk(
+                objective=self.mission.objective,
+                research_findings=res_data,
+                metric_data=dat_data,
+                verification=ver_data,
+            )
+            print(f"ADK synthesis recommendation: {recommendation[:100]}...")
+            await self.think("ADK synthesis agent completed successfully.")
+        except Exception as e:
+            print(f"ADK synthesis error, falling back to raw Gemini: {e}")
+            # Fallback: use raw genai client if ADK fails
+            if client:
+                try:
+                    synth_prompt = (
+                        f"You are the Render Farm Incident Copilot orchestrator. "
+                        f"Based on these findings, synthesize a clear, actionable recommendation to resolve this render farm incident:\n\n"
+                        f"Research: {res_data.get('findings', res_data.get('search', ''))}\n"
+                        f"Metrics: {dat_data.get('interpretation', '')}\n"
+                        f"Verification: {ver_data}\n\n"
+                        f"Objective: {self.mission.objective}\n\n"
+                        f"Conclude with: 'RECOMMENDED ACTION: [specific action]'"
+                    )
+                    resp = await generate_content(client, model=settings.GEMINI_MODEL, contents=synth_prompt)
+                    recommendation = resp.text
+                except Exception as e2:
+                    print(f"Gemini fallback synthesis error: {e2}")
 
         if not recommendation:
             recommendation = f"Based on research and metrics analysis, recommend scaling infrastructure. RECOMMENDED ACTION: Add 4 GPU nodes to render cluster to resolve backlog."
+
 
         self.mission.recommendation = recommendation
 
