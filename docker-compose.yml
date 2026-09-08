@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: aicrew-postgres
+    environment:
+      POSTGRES_USER: aicrew
+      POSTGRES_PASSWORD: aicrew
+      POSTGRES_DB: aicrew
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aicrew"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Grafana (with demo dashboards)
+  grafana:
+    image: grafana/grafana-oss:11.0.0
+    container_name: aicrew-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  pgdata:
+  grafana-data:

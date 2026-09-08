@@ -1,0 +1,95 @@
+# Render Farm Incident Copilot
+
+> **Agentic Cinema: The Blockbuster Hackathon** — *Google Cloud × Devpost*  
+> Partner Track: **Parallel** | Integration: **Grafana MCP**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Google Cloud Gemini](https://img.shields.io/badge/Google%20Cloud-Gemini%20Flash-4285F4)
+![Parallel Partner Track](https://img.shields.io/badge/Partner%20Track-Parallel-FF6B6B)
+![Grafana MCP](https://img.shields.io/badge/Integration-Grafana%20MCP-F46800)
+
+**The Problem**: A VFX render farm supervisor gets a Grafana alert — GPU utilization spiked to 94% on render-node-07, 847 frames are backlogged. Today they spend 30–60 minutes manually searching bug trackers, vendor patch notes, and Slack channels to figure out if it's a known Arnold renderer issue or a hardware failure, before deciding whether to scale the cluster at $2,400/hr.
+
+**The Copilot**: Render Farm Incident Copilot automates that investigation in 90 seconds. An **Orchestrator Agent** (Gemini Flash) decomposes the incident into an investigation plan. A **Research Agent** searches for known issues via Parallel Search & Task APIs. A **Metrics Analyst** pulls live telemetry from Grafana MCP. A **Verification Agent** cross-references all evidence. The system pauses at a **Human Approval Gate** before executing any infrastructure changes.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    U[Render Farm Supervisor] --> FE["Frontend<br/>React + TypeScript + Vite"]
+    FE <-->|SSE Stream / REST| BE["Backend Engine<br/>FastAPI"]
+    BE <--> ORCH["Orchestrator<br/>Gemini Flash"]
+    ORCH --> CREW["Agent Crew"]
+    
+    subgraph CREW["Specialized Agents"]
+        RA["Research Agent<br/>Parallel Search & Task APIs"]
+        DA["Metrics Analyst<br/>Grafana MCP + Prometheus"]
+        VA["Verification Agent<br/>Cross-Reference & Confidence"]
+    end
+    
+    RA --> PAR["Parallel Search & Task APIs"]
+    DA --> GRAF["Grafana MCP Server"]
+    
+    VA --> GATE{"Human Approval Gate"}
+    GATE -->|Approved| ACT["Infrastructure Action"]
+```
+
+---
+
+## Partner Track: Parallel
+
+| API | Usage | Role |
+|---|---|---|
+| **Search API** (`parallel_web_search`) | Search for known bugs, vendor advisories, community-reported issues | Primary investigation source |
+| **Task API** (`parallel_deep_research`) | Multi-hop deep research with trust-scored citations | Root cause synthesis |
+
+Both APIs fire on every mission run. Only successful live responses are treated as evidence; unavailable integrations are surfaced in the activity log and prevent an infrastructure recommendation.
+
+## Integration: Grafana MCP
+
+- **Protocol**: Official `mcp` Python SDK via stdio transport to the official `grafana/mcp-grafana` Docker server
+- **Tools**: `search_dashboards`, `list_datasources`, `query_prometheus`, `alerting_manage_rules`, `query_loki_logs`
+- **Auth**: Grafana Cloud or Grafana OSS service-account token (unattended execution)
+- **Evidence integrity**: Grafana MCP errors are surfaced as unavailable; the app never substitutes fabricated telemetry or citations.
+
+## Core AI: Google Cloud
+
+- **Engine**: Gemini Flash via `google-genai` (`gemini-flash-latest`) — 100% Google Cloud AI at runtime
+- **Usage**: Orchestrator planning, agent reasoning, evidence synthesis, cross-verification
+
+---
+
+## Quick Start
+
+### Backend
+```bash
+pip install -r requirements.txt
+cp .env.example .env  # Configure API keys
+uvicorn backend.main:app --port 8000
+```
+
+### Frontend
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Open **http://localhost:5173/**
+
+### Environment Variables
+```env
+GEMINI_API_KEY=your_gemini_api_key
+PARALLEL_API_KEY=your_parallel_api_key
+GRAFANA_URL=http://localhost:3000
+GRAFANA_SERVICE_ACCOUNT_TOKEN=your_token
+GEMINI_MODEL=gemini-flash-latest
+```
+
+For Grafana Cloud, set `GRAFANA_URL` to your stack URL, for example `https://your-stack.grafana.net`. When using the Docker MCP server, `localhost` refers to the container; use `http://host.docker.internal:3000` for a local Grafana instance instead.
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
